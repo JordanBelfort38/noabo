@@ -1,0 +1,11 @@
+Date,Payee,Account number,Transaction type,Payment reference,Amount (EUR),Amount (Foreign Currency),Type Foreign Currency,Exchange Rate
+2026-01-02,Netflix,DE123456789,MasterCard Payment,NETFLIX.COM,-13.99,,,
+2026-01-03,Spotify,DE123456789,MasterCard Payment,SPOTIFY PREMIUM,-9.99,,,
+2026-01-05,Carrefour City,DE123456789,MasterCard Payment,CARREFOUR CITY PARIS,-52.30,,,
+2026-01-07,Amazon,DE123456789,MasterCard Payment,AMAZON EU SARL,-27.50,,,
+2026-01-10,Salary,DE123456789,Income,VIR SALAIRE,2500.00,,,
+2026-01-12,Uber Eats,DE123456789,MasterCard Payment,UBER EATS,-22.40,,,
+2026-01-15,EDF,DE123456789,Direct Debit,PRLV EDF,-85.00,,,
+2026-01-18,SNCF,DE123456789,MasterCard Payment,SNCF VOYAGES,-67.00,,,
+2026-01-20,Basic-Fit,DE123456789,Direct Debit,BASIC-FIT,-29.99,,,
+2026-01-25,Disney+,DE123456789,Direct Debit,DISNEY PLUS,-8.99,,,
