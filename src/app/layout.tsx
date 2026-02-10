@@ -15,9 +15,56 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "No Abo — Gérez vos abonnements",
+  title: {
+    default: "No Abo — Gérez et résiliez vos abonnements | Économisez jusqu'à 550€/an",
+    template: "%s | No Abo",
+  },
   description:
-    "No Abo vous aide à suivre, gérer et résilier vos abonnements facilement. Reprenez le contrôle de vos dépenses récurrentes.",
+    "Détectez vos abonnements oubliés, suivez vos dépenses récurrentes et résiliez en quelques clics. Les Français dépensent 49€/mois en abonnements — reprenez le contrôle avec No Abo.",
+  keywords: [
+    "gestion abonnements",
+    "résilier abonnement",
+    "résiliation abonnement",
+    "économiser argent",
+    "abonnements oubliés",
+    "suivi dépenses",
+    "dépenses récurrentes",
+    "annuler abonnement",
+    "lettre résiliation",
+    "loi hamon",
+    "loi chatel",
+    "budget mensuel",
+    "abonnement streaming",
+    "gérer ses abonnements",
+    "no abo",
+  ],
+  authors: [{ name: "No Abo" }],
+  creator: "No Abo",
+  openGraph: {
+    type: "website",
+    locale: "fr_FR",
+    siteName: "No Abo",
+    title: "No Abo — Gérez et résiliez vos abonnements",
+    description:
+      "40% des Français paient des abonnements qu'ils n'utilisent plus. Détectez, analysez et résiliez vos abonnements inutiles. Économisez jusqu'à 550€/an.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "No Abo — Gérez et résiliez vos abonnements",
+    description:
+      "40% des Français paient des abonnements qu'ils n'utilisent plus. Économisez jusqu'à 550€/an avec No Abo.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
 };
 
 export default function RootLayout({
