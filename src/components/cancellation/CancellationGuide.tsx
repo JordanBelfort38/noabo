@@ -18,6 +18,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -147,8 +148,15 @@ export function CancellationGuide({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId, method }),
       });
-      if (res.ok) onRequestCreated?.();
-    } catch { /* ignore */ } finally {
+      if (res.ok) {
+        toast.success("Demande de résiliation enregistrée");
+        onRequestCreated?.();
+      } else {
+        toast.error("Erreur lors de l'enregistrement");
+      }
+    } catch {
+      toast.error("Erreur de connexion");
+    } finally {
       setCreating(false);
     }
   };
