@@ -7,6 +7,7 @@ import {
   Bell,
   Shield,
   ChevronRight,
+  ChevronDown,
   BarChart3,
   FileText,
   Zap,
@@ -15,6 +16,7 @@ import {
   PiggyBank,
   ArrowRight,
   CheckCircle2,
+  Check,
   Star,
 } from "lucide-react";
 import { AnimatedCounter } from "@/components/landing/AnimatedCounter";
@@ -426,8 +428,65 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* FAQ */}
+      {/* Pricing */}
       <section className="px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+              Tarif
+            </p>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
+              Gratuit. Point final.
+            </h2>
+            <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
+              Pas d&apos;abonnement, pas de frais cachés, pas de piège. Ironique, non ?
+            </p>
+          </div>
+
+          <div className="mx-auto mt-12 max-w-md">
+            <div className="relative overflow-hidden rounded-3xl border-2 border-blue-600 bg-white p-8 shadow-xl shadow-blue-600/10 dark:bg-zinc-900">
+              <div className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">
+                Pour toujours
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-extrabold text-zinc-900 dark:text-white">0&nbsp;€</span>
+                <span className="text-zinc-500">/mois</span>
+              </div>
+              <p className="mt-2 text-sm text-zinc-500">Aucune carte bancaire requise</p>
+
+              <ul className="mt-8 space-y-3">
+                {[
+                  "Détection illimitée d'abonnements",
+                  "Import CSV, PDF, OFX",
+                  "Tableau de bord complet",
+                  "Lettres de résiliation (Loi Hamon / Chatel)",
+                  "Alertes de renouvellement",
+                  "Calcul d'économies",
+                  "Guides de résiliation (70+ services)",
+                  "Chiffrement AES-256",
+                  "Conforme RGPD",
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-3 text-sm text-zinc-700 dark:text-zinc-300">
+                    <Check className="h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                href="/register"
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 text-base font-semibold text-white shadow-lg shadow-blue-600/25 transition-all hover:bg-blue-700 hover:shadow-xl hover:-translate-y-0.5"
+              >
+                Commencer maintenant
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-y border-zinc-200 bg-zinc-50 px-4 py-20 sm:px-6 sm:py-28 lg:px-8 dark:border-zinc-800 dark:bg-zinc-900/50">
         <div className="mx-auto max-w-3xl">
           <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl dark:text-white">
@@ -435,7 +494,7 @@ export default async function Home() {
             </h2>
           </div>
 
-          <div className="mt-12 space-y-6">
+          <div className="mt-12 space-y-3">
             <FaqItem
               question="Est-ce que No Abo est vraiment gratuit ?"
               answer="Oui, No Abo est entièrement gratuit. Nous ne vendons pas vos données et il n'y a aucun abonnement caché — ce serait un comble pour un anti-abonnements !"
@@ -455,6 +514,10 @@ export default async function Home() {
             <FaqItem
               question="Puis-je résilier directement depuis No Abo ?"
               answer="No Abo vous guide dans la résiliation avec des instructions détaillées et des lettres pré-rédigées conformes au droit français (Loi Hamon, Loi Chatel). Vous restez maître de chaque étape."
+            />
+            <FaqItem
+              question="Est-ce que No Abo fonctionne sur mobile ?"
+              answer="Oui, No Abo est entièrement responsive et fonctionne parfaitement sur smartphone, tablette et ordinateur. Aucune application à installer, tout se passe dans votre navigateur."
             />
           </div>
         </div>
@@ -715,9 +778,14 @@ function TestimonialCard({
 
 function FaqItem({ question, answer }: { question: string; answer: string }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="font-semibold text-zinc-900 dark:text-white">{question}</h3>
-      <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{answer}</p>
-    </div>
+    <details className="group rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 [&[open]]:shadow-sm">
+      <summary className="flex cursor-pointer items-center justify-between px-6 py-5 text-left font-semibold text-zinc-900 marker:content-none dark:text-white [&::-webkit-details-marker]:hidden">
+        {question}
+        <ChevronDown className="h-5 w-5 flex-shrink-0 text-zinc-400 transition-transform duration-200 group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-zinc-100 px-6 py-5 dark:border-zinc-800">
+        <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{answer}</p>
+      </div>
+    </details>
   );
 }

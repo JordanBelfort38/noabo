@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -124,9 +125,13 @@ export function SubscriptionForm({ mode, initialData }: SubscriptionFormProps) {
       if (!res.ok) {
         const data = await res.json();
         setError(data.error ?? "Erreur lors de la sauvegarde");
+        toast.error("Erreur lors de la sauvegarde");
         return;
       }
 
+      toast.success(
+        mode === "create" ? "Abonnement ajouté" : "Abonnement modifié"
+      );
       router.push("/dashboard");
       router.refresh();
     } catch {

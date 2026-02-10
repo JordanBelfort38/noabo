@@ -1,14 +1,17 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { encrypt } from "@/lib/encryption";
 
-const BRIDGE_API_URL = process.env.BRIDGE_API_URL ?? "https://api.bridgeapi.io/v2";
-const BRIDGE_API_KEY = process.env.BRIDGE_API_KEY ?? "";
-const BRIDGE_API_SECRET = process.env.BRIDGE_API_SECRET ?? "";
+// --- Configuration ---
+
+const BRIDGE_BASE_URL = process.env.BRIDGE_API_URL ?? "https://api.bridgeapi.io/v3";
+const BRIDGE_CLIENT_ID = process.env.BRIDGE_CLIENT_ID ?? "";
+const BRIDGE_CLIENT_SECRET = process.env.BRIDGE_CLIENT_SECRET ?? "";
 const BRIDGE_REDIRECT_URI =
   process.env.BRIDGE_REDIRECT_URI ?? "http://localhost:3000/api/bank/callback";
+const BRIDGE_VERSION = "2025-01-15";
 
-const USE_MOCK = !BRIDGE_API_KEY || process.env.NODE_ENV === "development";
+const USE_MOCK = !BRIDGE_CLIENT_ID;
 
 // --- State token management (CSRF protection) ---
 
@@ -28,21 +31,76 @@ export function validateStateToken(state: string): string | null {
   return entry.userId;
 }
 
-// --- Bridge API integration ---
+// --- Bridge API v3 helpers ---
 
-interface BridgeAuthResponse {
-  redirect_url: string;
+function bridgeHeaders(accessToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "Bridge-Version": BRIDGE_VERSION,
+    "Client-Id": BRIDGE_CLIENT_ID,
+    "Client-Secret": BRIDGE_CLIENT_SECRET,
+  };
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
+  return headers;
 }
 
-interface BridgeTokenResponse {
+async function bridgeFetch<T>(
+  path: string,
+  options: { method?: string; body?: unknown; accessToken?: string } = {}
+): Promise<T> {
+  const url = path.startsWith("http") ? path : `${BRIDGE_BASE_URL}${path}`;
+  const method = options.method ?? "GET";
+
+  console.log(`[Bridge API] ${method} ${url}`);
+
+  const res = await fetch(url, {
+    method,
+    headers: bridgeHeaders(options.accessToken),
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => "");
+    console.error(`[Bridge API] ${res.status} ${method} ${url}:`, errorBody);
+    throw new Error(`Bridge API ${res.status}: ${errorBody}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+// --- Bridge API v3 types ---
+
+interface BridgeUser {
+  uuid: string;
+  external_user_id?: string;
+}
+
+interface BridgeAuthToken {
   access_token: string;
-  refresh_token?: string;
-  expires_at?: string;
-  item_id?: number;
+  expires_at: string;
+  user: BridgeUser;
+}
+
+interface BridgeConnectSession {
+  id: string;
+  url: string;
+}
+
+interface BridgeItem {
+  id: number;
+  status: number;
+  bank_id?: number;
+  status_code_info?: string;
+  status_code_description?: string;
+  authentication_expires_at?: string;
 }
 
 interface BridgeAccount {
   id: number;
+  item_id: number;
   name: string;
   iban?: string;
   balance: number;
@@ -54,54 +112,93 @@ interface BridgeAccount {
 interface BridgeTransaction {
   id: number;
   date: string;
-  description: string;
-  raw_description?: string;
+  clean_description: string;
+  bank_description: string;
   amount: number;
   currency_code: string;
   category_id?: number;
   is_future: boolean;
+  account_id: number;
 }
+
+interface BridgePaginatedResponse<T> {
+  resources: T[];
+  pagination: {
+    next_uri: string | null;
+  };
+}
+
+interface BridgeBank {
+  id: number;
+  name: string;
+  logo_url?: string;
+  country_code: string;
+}
+
+// --- Bridge user management ---
+
+async function getOrCreateBridgeUser(userId: string, email: string): Promise<string> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (user?.bridgeUserUuid) return user.bridgeUserUuid;
+
+  const data = await bridgeFetch<{ uuid: string }>("/aggregation/users", {
+    method: "POST",
+    body: { external_user_id: userId },
+  });
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { bridgeUserUuid: data.uuid },
+  });
+
+  return data.uuid;
+}
+
+async function getBridgeAccessToken(userId: string, email: string): Promise<string> {
+  const bridgeUserUuid = await getOrCreateBridgeUser(userId, email);
+
+  const data = await bridgeFetch<BridgeAuthToken>("/aggregation/authorization/token", {
+    method: "POST",
+    body: { user_uuid: bridgeUserUuid },
+  });
+
+  return data.access_token;
+}
+
+// --- Public API ---
 
 export async function initiateBankConnection(
   userId: string,
+  email: string,
   _provider: string = "bridge"
 ): Promise<{ redirectUrl: string; state: string }> {
   const state = generateStateToken(userId);
 
   if (USE_MOCK) {
     return {
-      redirectUrl: `/api/bank/callback?code=mock_auth_code_${Date.now()}&state=${state}`,
+      redirectUrl: `/api/bank/callback?item_id=mock_item_${Date.now()}&user_uuid=mock_uuid&success=true&state=${state}`,
       state,
     };
   }
 
-  const res = await fetch(`${BRIDGE_API_URL}/connect/items/add`, {
+  const accessToken = await getBridgeAccessToken(userId, email);
+
+  const session = await bridgeFetch<BridgeConnectSession>("/aggregation/connect-sessions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Bridge-Version": "2021-06-01",
-      "Client-Id": BRIDGE_API_KEY,
-      "Client-Secret": BRIDGE_API_SECRET,
+    accessToken,
+    body: {
+      callback_url: `${BRIDGE_REDIRECT_URI}?state=${state}`,
+      user_email: email,
     },
-    body: JSON.stringify({
-      redirect_url: `${BRIDGE_REDIRECT_URI}?state=${state}`,
-      country: "fr",
-    }),
   });
 
-  if (!res.ok) {
-    throw new Error(`Bridge API error: ${res.status} ${res.statusText}`);
-  }
-
-  const data = (await res.json()) as BridgeAuthResponse;
-  return { redirectUrl: data.redirect_url, state };
+  return { redirectUrl: session.url, state };
 }
 
 export async function handleBankCallback(
-  code: string,
-  state: string
+  params: { itemId?: string; userUuid?: string; success?: string; state: string }
 ): Promise<{ connectionId: string; accountCount: number }> {
-  const userId = validateStateToken(state);
+  const userId = validateStateToken(params.state);
   if (!userId) {
     throw new Error("Invalid or expired state token");
   }
@@ -110,44 +207,62 @@ export async function handleBankCallback(
     return createMockConnection(userId);
   }
 
-  // Exchange code for tokens
-  const tokenRes = await fetch(`${BRIDGE_API_URL}/connect/items/add/validate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Bridge-Version": "2021-06-01",
-      "Client-Id": BRIDGE_API_KEY,
-      "Client-Secret": BRIDGE_API_SECRET,
-    },
-    body: JSON.stringify({ code }),
-  });
-
-  if (!tokenRes.ok) {
-    throw new Error(`Token exchange failed: ${tokenRes.status}`);
+  if (params.success !== "true" || !params.itemId) {
+    throw new Error("Bank connection was not completed successfully");
   }
 
-  const tokenData = (await tokenRes.json()) as BridgeTokenResponse;
+  const itemId = params.itemId;
 
-  // Create bank connection
+  // Get a fresh access token to fetch data
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error("User not found");
+  const accessToken = await getBridgeAccessToken(userId, user.email);
+
+  // Fetch item details to get bank info
+  let bankName = "Banque connectée";
+  let bankLogoUrl: string | null = null;
+  let authExpiresAt: Date | null = null;
+
+  try {
+    const item = await bridgeFetch<BridgeItem>(`/aggregation/items/${itemId}`, {
+      accessToken,
+    });
+    authExpiresAt = item.authentication_expires_at
+      ? new Date(item.authentication_expires_at)
+      : null;
+
+    if (item.bank_id) {
+      try {
+        const bank = await bridgeFetch<BridgeBank>(`/aggregation/banks/${item.bank_id}`, {
+          accessToken,
+        });
+        bankName = bank.name;
+        bankLogoUrl = bank.logo_url ?? null;
+      } catch {
+        // Non-critical — keep default name
+      }
+    }
+  } catch {
+    // Non-critical — keep defaults
+  }
+
+  // Store the access token encrypted for future sync calls
   const connection = await prisma.bankConnection.create({
     data: {
       userId,
       provider: "bridge",
-      providerItemId: tokenData.item_id?.toString(),
-      accessToken: encrypt(tokenData.access_token),
-      refreshToken: tokenData.refresh_token
-        ? encrypt(tokenData.refresh_token)
-        : null,
+      providerItemId: itemId,
+      accessToken: encrypt(accessToken),
       status: "active",
-      consentExpiresAt: tokenData.expires_at
-        ? new Date(tokenData.expires_at)
-        : null,
-      bankName: "Banque connectée",
+      bankName,
+      bankLogoUrl,
+      consentExpiresAt: authExpiresAt,
+      lastSyncAt: new Date(),
     },
   });
 
-  // Fetch accounts
-  const accounts = await fetchBridgeAccounts(tokenData.access_token);
+  // Fetch and store accounts
+  const accounts = await fetchAllAccounts(accessToken, parseInt(itemId, 10));
   for (const acc of accounts) {
     await prisma.bankAccount.create({
       data: {
@@ -155,30 +270,19 @@ export async function handleBankCallback(
         bankConnectionId: connection.id,
         providerAccountId: acc.id.toString(),
         name: acc.name,
-        iban: acc.iban,
+        iban: acc.iban ? maskIban(acc.iban) : null,
         balance: Math.round(acc.balance * 100),
-        currency: acc.currency_code,
+        currency: acc.currency_code ?? "EUR",
         accountType: mapAccountType(acc.type),
+        balanceDate: new Date(),
       },
     });
   }
 
+  // Fetch initial transactions
+  await syncTransactionsForConnection(connection.id, userId, accessToken);
+
   return { connectionId: connection.id, accountCount: accounts.length };
-}
-
-async function fetchBridgeAccounts(accessToken: string): Promise<BridgeAccount[]> {
-  const res = await fetch(`${BRIDGE_API_URL}/accounts`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Bridge-Version": "2021-06-01",
-      "Client-Id": BRIDGE_API_KEY,
-      "Client-Secret": BRIDGE_API_SECRET,
-    },
-  });
-
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.resources ?? [];
 }
 
 export async function syncTransactions(
@@ -186,7 +290,7 @@ export async function syncTransactions(
 ): Promise<{ newCount: number; totalCount: number }> {
   const connection = await prisma.bankConnection.findUnique({
     where: { id: connectionId },
-    include: { bankAccounts: true },
+    include: { bankAccounts: true, user: { select: { email: true, bridgeUserUuid: true } } },
   });
 
   if (!connection) throw new Error("Connection not found");
@@ -195,52 +299,100 @@ export async function syncTransactions(
     return syncMockTransactions(connection.userId, connectionId, connection.bankAccounts[0]?.id);
   }
 
-  if (!connection.accessToken) throw new Error("No access token");
-  const accessToken = decrypt(connection.accessToken);
+  if (!connection.user.bridgeUserUuid) throw new Error("No Bridge user linked");
+
+  // Get a fresh access token (tokens expire after 2h)
+  const accessToken = await getBridgeAccessToken(connection.userId, connection.user.email);
+
+  // Update stored token
+  await prisma.bankConnection.update({
+    where: { id: connectionId },
+    data: { accessToken: encrypt(accessToken) },
+  });
+
+  return syncTransactionsForConnection(connectionId, connection.userId, accessToken);
+}
+
+async function syncTransactionsForConnection(
+  connectionId: string,
+  userId: string,
+  accessToken: string
+): Promise<{ newCount: number; totalCount: number }> {
+  const connection = await prisma.bankConnection.findUnique({
+    where: { id: connectionId },
+    include: { bankAccounts: true },
+  });
+  if (!connection) throw new Error("Connection not found");
 
   let newCount = 0;
+
   for (const account of connection.bankAccounts) {
     const since = connection.lastSyncAt?.toISOString().split("T")[0];
-    let url = `${BRIDGE_API_URL}/accounts/${account.providerAccountId}/transactions`;
-    if (since) url += `?since=${since}`;
+    let url = `/aggregation/accounts/${account.providerAccountId}/transactions?limit=500`;
+    if (since) url += `&since=${since}`;
 
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Bridge-Version": "2021-06-01",
-        "Client-Id": BRIDGE_API_KEY,
-        "Client-Secret": BRIDGE_API_SECRET,
-      },
-    });
+    try {
+      // Paginate through all transactions
+      let nextUri: string | null = url;
+      while (nextUri) {
+        const page: BridgePaginatedResponse<BridgeTransaction> = await bridgeFetch<BridgePaginatedResponse<BridgeTransaction>>(nextUri, {
+          accessToken,
+        });
+        const data = page;
 
-    if (!res.ok) continue;
-    const data = await res.json();
-    const txs: BridgeTransaction[] = data.resources ?? [];
+        for (const tx of data.resources) {
+          if (tx.is_future) continue;
+          const externalId = `bridge_${tx.id}`;
 
-    for (const tx of txs) {
-      if (tx.is_future) continue;
-      const externalId = `bridge_${tx.id}`;
+          try {
+            await prisma.transaction.upsert({
+              where: { userId_externalId: { userId, externalId } },
+              create: {
+                userId,
+                bankAccountId: account.id,
+                externalId,
+                date: new Date(tx.date),
+                description: tx.clean_description || tx.bank_description,
+                rawDescription: tx.bank_description,
+                amount: Math.round(tx.amount * 100),
+                currency: tx.currency_code ?? "EUR",
+                importSource: "api",
+              },
+              update: {
+                description: tx.clean_description || tx.bank_description,
+                amount: Math.round(tx.amount * 100),
+              },
+            });
+            newCount++;
+          } catch {
+            // Skip individual transaction errors
+          }
+        }
 
-      await prisma.transaction.upsert({
-        where: { userId_externalId: { userId: connection.userId, externalId } },
-        create: {
-          userId: connection.userId,
-          bankAccountId: account.id,
-          externalId,
-          date: new Date(tx.date),
-          description: tx.description,
-          rawDescription: tx.raw_description,
-          amount: Math.round(tx.amount * 100),
-          currency: tx.currency_code,
-          importSource: "api",
-        },
-        update: {
-          description: tx.description,
-          amount: Math.round(tx.amount * 100),
+        nextUri = data.pagination?.next_uri ?? null;
+      }
+    } catch (err) {
+      console.error(`Error syncing account ${account.providerAccountId}:`, err);
+    }
+  }
+
+  // Update account balances
+  try {
+    for (const account of connection.bankAccounts) {
+      const accData = await bridgeFetch<BridgeAccount>(
+        `/aggregation/accounts/${account.providerAccountId}`,
+        { accessToken }
+      );
+      await prisma.bankAccount.update({
+        where: { id: account.id },
+        data: {
+          balance: Math.round(accData.balance * 100),
+          balanceDate: new Date(),
         },
       });
-      newCount++;
     }
+  } catch {
+    // Non-critical
   }
 
   await prisma.bankConnection.update({
@@ -248,76 +400,57 @@ export async function syncTransactions(
     data: { lastSyncAt: new Date(), lastSyncError: null },
   });
 
-  const totalCount = await prisma.transaction.count({
-    where: { userId: connection.userId },
-  });
-
+  const totalCount = await prisma.transaction.count({ where: { userId } });
   return { newCount, totalCount };
 }
 
-export async function refreshBankToken(connectionId: string): Promise<boolean> {
+export async function refreshBankConnection(connectionId: string): Promise<boolean> {
   const connection = await prisma.bankConnection.findUnique({
     where: { id: connectionId },
+    include: { user: { select: { email: true, bridgeUserUuid: true } } },
   });
 
-  if (!connection?.refreshToken) return false;
+  if (!connection) return false;
   if (USE_MOCK) return true;
 
-  const refreshToken = decrypt(connection.refreshToken);
+  if (!connection.user.bridgeUserUuid) return false;
 
-  const res = await fetch(`${BRIDGE_API_URL}/connect/items/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Bridge-Version": "2021-06-01",
-      "Client-Id": BRIDGE_API_KEY,
-      "Client-Secret": BRIDGE_API_SECRET,
-    },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-
-  if (!res.ok) {
+  try {
+    const accessToken = await getBridgeAccessToken(connection.userId, connection.user.email);
+    await prisma.bankConnection.update({
+      where: { id: connectionId },
+      data: {
+        accessToken: encrypt(accessToken),
+        status: "active",
+      },
+    });
+    return true;
+  } catch {
     await prisma.bankConnection.update({
       where: { id: connectionId },
       data: { status: "expired" },
     });
     return false;
   }
-
-  const data = (await res.json()) as BridgeTokenResponse;
-  await prisma.bankConnection.update({
-    where: { id: connectionId },
-    data: {
-      accessToken: encrypt(data.access_token),
-      refreshToken: data.refresh_token ? encrypt(data.refresh_token) : undefined,
-      status: "active",
-    },
-  });
-
-  return true;
 }
 
 export async function disconnectBank(connectionId: string, userId: string): Promise<void> {
   const connection = await prisma.bankConnection.findUnique({
     where: { id: connectionId },
+    include: { user: { select: { email: true, bridgeUserUuid: true } } },
   });
 
   if (!connection || connection.userId !== userId) {
     throw new Error("Connection not found");
   }
 
-  // Revoke token with provider (best effort)
-  if (!USE_MOCK && connection.accessToken) {
+  // Delete item with Bridge (best effort)
+  if (!USE_MOCK && connection.providerItemId && connection.user.bridgeUserUuid) {
     try {
-      const accessToken = decrypt(connection.accessToken);
-      await fetch(`${BRIDGE_API_URL}/connect/items/${connection.providerItemId}/delete`, {
+      const accessToken = await getBridgeAccessToken(userId, connection.user.email);
+      await bridgeFetch(`/aggregation/items/${connection.providerItemId}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Bridge-Version": "2021-06-01",
-          "Client-Id": BRIDGE_API_KEY,
-          "Client-Secret": BRIDGE_API_SECRET,
-        },
+        accessToken,
       });
     } catch {
       // Best effort — continue with local deletion
@@ -332,6 +465,43 @@ export async function disconnectBank(connectionId: string, userId: string): Prom
       refreshToken: null,
     },
   });
+}
+
+// --- Helpers ---
+
+function maskIban(iban: string): string {
+  if (iban.length < 8) return iban;
+  return iban.slice(0, 4) + " •••• •••• •••• •••• ••" + iban.slice(-2);
+}
+
+function mapAccountType(type: string): string {
+  const map: Record<string, string> = {
+    checking: "checking",
+    savings: "savings",
+    card: "card",
+    loan: "loan",
+    brokerage: "investment",
+    life_insurance: "savings",
+  };
+  return map[type?.toLowerCase()] ?? "checking";
+}
+
+async function fetchAllAccounts(accessToken: string, itemId?: number): Promise<BridgeAccount[]> {
+  const allAccounts: BridgeAccount[] = [];
+  let nextUri: string | null = "/aggregation/accounts?limit=500";
+
+  while (nextUri) {
+    const page: BridgePaginatedResponse<BridgeAccount> = await bridgeFetch<BridgePaginatedResponse<BridgeAccount>>(nextUri, {
+      accessToken,
+    });
+    const filtered = itemId
+      ? page.resources.filter((a: BridgeAccount) => a.item_id === itemId)
+      : page.resources;
+    allAccounts.push(...filtered);
+    nextUri = page.pagination?.next_uri ?? null;
+  }
+
+  return allAccounts;
 }
 
 // --- Mock data for development ---
@@ -367,14 +537,13 @@ async function createMockConnection(userId: string) {
       providerAccountId: `mock_acc_${Date.now()}`,
       name: "Compte courant",
       iban: "FR76 •••• •••• •••• •••• ••42",
-      balance: 234567, // 2345.67€
+      balance: 234567,
       currency: "EUR",
       accountType: "checking",
       balanceDate: new Date(),
     },
   });
 
-  // Create mock transactions
   await syncMockTransactions(userId, connection.id, account.id);
 
   return { connectionId: connection.id, accountCount: 1 };
@@ -415,7 +584,6 @@ async function syncMockTransactions(
     for (const mock of MOCK_TRANSACTIONS) {
       const date = new Date(now);
       date.setMonth(date.getMonth() - monthOffset);
-      // Randomize day slightly
       date.setDate(Math.max(1, Math.min(28, Math.floor(Math.random() * 28) + 1)));
 
       const externalId = `mock_${mock.description.replace(/\s/g, "_")}_${date.toISOString().slice(0, 7)}`;
@@ -430,7 +598,7 @@ async function syncMockTransactions(
             date,
             description: mock.description,
             rawDescription: mock.description,
-            amount: mock.amount + Math.floor(Math.random() * 100 - 50), // slight variance
+            amount: mock.amount + Math.floor(Math.random() * 100 - 50),
             currency: "EUR",
             category: mock.category,
             merchantName: mock.merchant,
@@ -454,16 +622,3 @@ async function syncMockTransactions(
   const totalCount = await prisma.transaction.count({ where: { userId } });
   return { newCount, totalCount };
 }
-
-function mapAccountType(type: string): string {
-  const map: Record<string, string> = {
-    checking: "checking",
-    savings: "savings",
-    card: "card",
-    loan: "loan",
-    brokerage: "investment",
-  };
-  return map[type.toLowerCase()] ?? "checking";
-}
-
-// SUPPORTED_BANKS is in @/lib/bank-constants.ts (client-safe)

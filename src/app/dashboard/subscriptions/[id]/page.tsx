@@ -16,6 +16,7 @@ import {
   Scissors,
 } from "lucide-react";
 
+import { toast } from "sonner";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -128,13 +129,23 @@ function SubscriptionDetailContent() {
   }, [fetchData]);
 
   const handleConfirm = async () => {
-    await fetch(`/api/subscriptions/${id}/confirm`, { method: "POST" });
+    const res = await fetch(`/api/subscriptions/${id}/confirm`, { method: "POST" });
+    if (res.ok) {
+      toast.success("Abonnement confirmé");
+    } else {
+      toast.error("Erreur lors de la confirmation");
+    }
     await fetchData();
   };
 
   const handleDelete = async () => {
     setDeleting(true);
-    await fetch(`/api/subscriptions/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/subscriptions/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Abonnement supprimé");
+    } else {
+      toast.error("Erreur lors de la suppression");
+    }
     router.push("/dashboard");
   };
 

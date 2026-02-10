@@ -8,12 +8,16 @@ import {
   Upload,
   Search,
   Shield,
+  Lock,
   FileText,
   Loader2,
   CheckCircle2,
   AlertCircle,
+  ArrowLeft,
   X,
+  FlaskConical,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +32,7 @@ function BankConnectContent() {
   const router = useRouter();
   const [tab, setTab] = useState("api");
   const [bankSearch, setBankSearch] = useState("");
-  const [connecting, setConnecting] = useState(false);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
 
   // Upload state
@@ -44,12 +48,13 @@ function BankConnectContent() {
   } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const filteredBanks = SUPPORTED_BANKS.filter((b) =>
+  const popularBanks = SUPPORTED_BANKS.filter((b) => b.popular);
+  const allBanks = SUPPORTED_BANKS.filter((b) =>
     b.name.toLowerCase().includes(bankSearch.toLowerCase())
   );
 
   const handleConnect = async (bankId: string) => {
-    setConnecting(true);
+    setConnectingId(bankId);
     setConnectError(null);
 
     try {
@@ -62,7 +67,10 @@ function BankConnectContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        setConnectError(data.error ?? "Erreur de connexion");
+        const msg = data.detail
+          ? `${data.error} — ${data.detail}`
+          : (data.error ?? "Erreur de connexion");
+        setConnectError(msg);
         return;
       }
 
@@ -71,7 +79,7 @@ function BankConnectContent() {
     } catch {
       setConnectError("Erreur de connexion. Veuillez réessayer.");
     } finally {
-      setConnecting(false);
+      setConnectingId(null);
     }
   };
 
@@ -103,6 +111,7 @@ function BankConnectContent() {
         bankFormat: data.bankFormat,
         errors: data.errors,
       });
+      toast.success(`${data.imported} transaction(s) importée(s)`);
     } catch {
       setUploadError("Erreur de connexion. Veuillez réessayer.");
     } finally {
@@ -127,13 +136,23 @@ function BankConnectContent() {
 
   return (
     <div className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-zinc-950">
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-4xl space-y-6">
+        {/* Header with back button */}
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard/bank">
+            <Button variant="ghost" size="sm" className="gap-1.5">
+              <ArrowLeft className="h-4 w-4" />
+              Retour
+            </Button>
+          </Link>
+        </div>
+
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-            Ajouter un compte bancaire
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Connecter une banque
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Connectez votre banque ou importez vos relevés pour détecter vos abonnements
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Sélectionnez votre banque pour une connexion sécurisée via Open Banking
           </p>
         </div>
 
@@ -141,7 +160,7 @@ function BankConnectContent() {
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="api" className="gap-2">
               <Building2 className="h-4 w-4" />
-              Connexion API
+              Connexion automatique
             </TabsTrigger>
             <TabsTrigger value="upload" className="gap-2">
               <Upload className="h-4 w-4" />
@@ -150,66 +169,159 @@ function BankConnectContent() {
           </TabsList>
 
           {/* TAB 1: API Connection */}
-          <TabsContent value="api">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Connecter ma banque</CardTitle>
-                <CardDescription>
-                  Connexion sécurisée via Open Banking (DSP2). Vos identifiants ne transitent jamais par nos serveurs.
-                </CardDescription>
-                <div className="flex items-center gap-2 pt-2">
-                  <Badge variant="success" className="gap-1">
-                    <Shield className="h-3 w-3" />
-                    Connexion sécurisée DSP2
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {connectError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{connectError}</AlertDescription>
-                  </Alert>
-                )}
+          <TabsContent value="api" className="space-y-6">
+            {/* Error */}
+            {connectError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{connectError}</AlertDescription>
+              </Alert>
+            )}
 
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                  <Input
-                    placeholder="Rechercher votre banque..."
-                    value={bankSearch}
-                    onChange={(e) => setBankSearch(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+            {/* Security badges */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant="success" className="gap-1">
+                <Shield className="h-3 w-3" />
+                Connexion sécurisée DSP2
+              </Badge>
+              <Badge variant="outline" className="gap-1">
+                <Lock className="h-3 w-3" />
+                Données chiffrées
+              </Badge>
+            </div>
 
-                <div className="grid gap-2">
-                  {filteredBanks.map((bank) => (
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <Input
+                placeholder="Rechercher votre banque..."
+                value={bankSearch}
+                onChange={(e) => setBankSearch(e.target.value)}
+                className="h-11 pl-10 text-base"
+              />
+              {bankSearch && (
+                <button
+                  onClick={() => setBankSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Popular banks (only when not searching) */}
+            {!bankSearch && (
+              <div>
+                <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Banques populaires
+                </h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                  {popularBanks.map((bank) => (
                     <button
                       key={bank.id}
                       onClick={() => handleConnect(bank.id)}
-                      disabled={connecting}
-                      className="flex items-center gap-3 rounded-lg border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50"
+                      disabled={connectingId !== null}
+                      className="group flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-4 transition-all hover:border-blue-300 hover:shadow-md disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-blue-700"
                     >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                        {bank.name.substring(0, 2).toUpperCase()}
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-50 text-sm font-bold text-zinc-600 transition-transform group-hover:scale-110 dark:from-zinc-800 dark:to-zinc-800/50 dark:text-zinc-400">
+                        {connectingId === bank.id ? (
+                          <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                        ) : (
+                          bank.name.substring(0, 2).toUpperCase()
+                        )}
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                          {bank.name}
-                        </p>
-                      </div>
-                      {bank.popular && <Badge variant="secondary">Populaire</Badge>}
+                      <span className="text-center text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        {bank.name}
+                      </span>
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
 
-                  {filteredBanks.length === 0 && (
-                    <p className="py-8 text-center text-sm text-zinc-500">
+            {/* All banks / search results */}
+            <div>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                {bankSearch ? `Résultats pour "${bankSearch}"` : "Toutes les banques"}
+              </h2>
+              <div className="grid gap-2">
+                {allBanks.map((bank) => (
+                  <button
+                    key={bank.id}
+                    onClick={() => handleConnect(bank.id)}
+                    disabled={connectingId !== null}
+                    className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 text-left transition-all hover:border-blue-300 hover:shadow-sm disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-blue-700"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-zinc-100 to-zinc-50 text-xs font-bold text-zinc-600 dark:from-zinc-800 dark:to-zinc-800/50 dark:text-zinc-400">
+                      {connectingId === bank.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      ) : (
+                        bank.name.substring(0, 2).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        {bank.name}
+                      </p>
+                    </div>
+                    {bank.popular && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        Populaire
+                      </Badge>
+                    )}
+                  </button>
+                ))}
+
+                {allBanks.length === 0 && (
+                  <div className="flex flex-col items-center py-12 text-center">
+                    <Search className="mb-3 h-8 w-8 text-zinc-300 dark:text-zinc-600" />
+                    <p className="text-sm text-zinc-500">
                       Aucune banque trouvée pour &quot;{bankSearch}&quot;
                     </p>
-                  )}
+                    <p className="mt-1 text-xs text-zinc-400">
+                      Essayez un autre nom ou utilisez l&apos;import manuel
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Demo bank for sandbox */}
+            {!bankSearch && (
+              <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/50 p-4 dark:border-amber-700 dark:bg-amber-900/10">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                    <FlaskConical className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        Demo Bank
+                      </p>
+                      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                        Sandbox
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Banque de test pour simuler une connexion
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleConnect("demo")}
+                    disabled={connectingId !== null}
+                    className="shrink-0 gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                  >
+                    {connectingId === "demo" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      "Tester"
+                    )}
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            )}
           </TabsContent>
 
           {/* TAB 2: Manual Upload */}
@@ -282,10 +394,10 @@ function BankConnectContent() {
                   onDragLeave={() => setDragOver(false)}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors ${
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 transition-all ${
                     dragOver
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/10"
-                      : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-600"
+                      ? "border-blue-500 bg-blue-50 shadow-inner dark:bg-blue-900/10"
+                      : "border-zinc-300 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/30"
                   }`}
                   role="button"
                   tabIndex={0}
@@ -303,7 +415,9 @@ function BankConnectContent() {
                     </>
                   ) : (
                     <>
-                      <FileText className="mb-3 h-10 w-10 text-zinc-400" />
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <FileText className="h-7 w-7 text-zinc-400" />
+                      </div>
                       <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                         Glissez votre relevé ici ou cliquez pour sélectionner
                       </p>
@@ -323,7 +437,7 @@ function BankConnectContent() {
                 </div>
 
                 {/* Tutorial link */}
-                <div className="rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800/50">
+                <div className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
                   <p className="text-sm text-zinc-600 dark:text-zinc-400">
                     <strong>Besoin d&apos;aide ?</strong>{" "}
                     <Link

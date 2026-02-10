@@ -27,6 +27,12 @@ export function Header() {
             <div className="h-9 w-24 animate-pulse rounded-md bg-zinc-100 dark:bg-zinc-800" />
           ) : session?.user ? (
             <>
+              <Link href="/dashboard" className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 px-3 py-2">
+                Tableau de bord
+              </Link>
+              <Link href="/dashboard/cancellations" className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 px-3 py-2">
+                Résiliations
+              </Link>
               <Link href="/profile">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <User className="h-4 w-4" />
@@ -47,6 +53,12 @@ export function Header() {
             </>
           ) : (
             <>
+              <Link href="#comment-ca-marche" className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 px-3 py-2">
+                Comment ça marche
+              </Link>
+              <Link href="/help/cancel" className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 px-3 py-2">
+                Guides
+              </Link>
               <Link href="/login">
                 <Button variant="ghost" size="sm">
                   Se connecter

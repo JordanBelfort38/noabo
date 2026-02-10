@@ -14,10 +14,11 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
-  gdprConsent   Boolean   @default(false)
-  gdprConsentAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  gdprConsent     Boolean   @default(false)
+  gdprConsentAt   DateTime?
+  bridgeUserUuid  String?   // Bridge API user UUID
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   accounts              Account[]
   sessions              Session[]

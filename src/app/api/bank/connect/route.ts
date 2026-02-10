@@ -22,14 +22,16 @@ export async function POST(request: Request) {
 
     const { redirectUrl, state } = await initiateBankConnection(
       session!.user.id,
+      session!.user.email!,
       provider
     );
 
     return NextResponse.json({ redirectUrl, state });
   } catch (err) {
     console.error("Bank connect error:", err);
+    const detail = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: "Erreur lors de l'initialisation de la connexion bancaire" },
+      { error: "Erreur lors de l'initialisation de la connexion bancaire", detail },
       { status: 500 }
     );
   }

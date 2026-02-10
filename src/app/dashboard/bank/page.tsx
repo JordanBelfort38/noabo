@@ -1,40 +1,50 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Building2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { PlusCircle, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { BankConnectionCard } from "@/components/bank/BankConnectionCard";
+import { BankCard, type BankConnectionData } from "@/components/bank/BankCard";
+import { BankEmptyState } from "@/components/bank/BankEmptyState";
+import { BankStatsCards } from "@/components/bank/BankStatsCards";
+import { BankCardSkeleton, BankStatsSkeleton } from "@/components/bank/BankCardSkeleton";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface BankAccountInfo {
-  name: string;
-  balance: number | null;
-  currency: string;
-}
-
-interface Connection {
-  id: string;
-  bankName: string | null;
-  bankLogoUrl: string | null;
-  status: string;
-  lastSyncAt: string | null;
-  provider: string;
-  bankAccounts: BankAccountInfo[];
-}
-
 function BankDashboardContent() {
   const searchParams = useSearchParams();
-  const [connections, setConnections] = useState<Connection[]>([]);
+  const router = useRouter();
+  const [connections, setConnections] = useState<BankConnectionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const successParam = searchParams.get("success");
   const errorParam = searchParams.get("error");
+
+  // Show toast for callback results and clean URL
+  useEffect(() => {
+    if (successParam === "true") {
+      toast.success("Connexion bancaire établie !", {
+        description: "Vos transactions sont en cours de synchronisation.",
+      });
+      router.replace("/dashboard/bank", { scroll: false });
+    } else if (errorParam) {
+      const messages: Record<string, string> = {
+        expired_state: "La session de connexion a expiré. Veuillez réessayer.",
+        missing_params: "Paramètres manquants dans la réponse de la banque.",
+        cancelled: "Connexion annulée. Vous pouvez réessayer quand vous le souhaitez.",
+        connection_failed: "La connexion bancaire n'a pas pu être établie.",
+        callback_failed: "Erreur lors de la connexion bancaire.",
+      };
+      toast.error("Erreur de connexion", {
+        description: messages[errorParam] ?? "Une erreur inattendue est survenue.",
+      });
+      router.replace("/dashboard/bank", { scroll: false });
+    }
+  }, [successParam, errorParam, router]);
 
   const fetchConnections = useCallback(async () => {
     try {
@@ -55,94 +65,68 @@ function BankDashboardContent() {
   }, [fetchConnections]);
 
   const handleSync = async (connectionId: string) => {
-    setSyncMessage(null);
-    try {
-      const res = await fetch("/api/bank/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectionId }),
-      });
+    const res = await fetch("/api/bank/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ connectionId }),
+    });
+    if (!res.ok) {
       const data = await res.json();
-      if (res.ok) {
-        setSyncMessage(data.message);
-        await fetchConnections();
-      } else {
-        setError(data.error ?? "Erreur de synchronisation");
-      }
-    } catch {
-      setError("Erreur de connexion");
+      throw new Error(data.error ?? "Erreur de synchronisation");
     }
+    await fetchConnections();
   };
 
   const handleDisconnect = async (connectionId: string) => {
-    try {
-      const res = await fetch("/api/bank/disconnect", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectionId }),
-      });
-      if (res.ok) {
-        setConnections((prev) => prev.filter((c) => c.id !== connectionId));
-      } else {
-        const data = await res.json();
-        setError(data.error ?? "Erreur de déconnexion");
-      }
-    } catch {
-      setError("Erreur de connexion");
+    const res = await fetch("/api/bank/disconnect", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ connectionId }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error ?? "Erreur de déconnexion");
     }
+    setConnections((prev) => prev.filter((c) => c.id !== connectionId));
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
-  }
+  // Compute stats
+  const bankCount = connections.length;
+  const accountCount = connections.reduce((s, c) => s + c.bankAccounts.length, 0);
+  const totalBalance = connections.reduce((s, c) => {
+    return s + c.bankAccounts.reduce((a, acc) => a + (acc.balance ?? 0), 0);
+  }, 0);
+  const hasBalance = connections.some((c) => c.bankAccounts.some((a) => a.balance !== null));
+  const lastSyncAt = connections.reduce<string | null>((latest, c) => {
+    if (!c.lastSyncAt) return latest;
+    if (!latest) return c.lastSyncAt;
+    return c.lastSyncAt > latest ? c.lastSyncAt : latest;
+  }, null);
 
   return (
     <div className="min-h-screen bg-zinc-50 px-4 py-8 dark:bg-zinc-950">
-      <div className="mx-auto max-w-3xl space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="mx-auto max-w-5xl space-y-8">
+        {/* Page header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
               Mes comptes bancaires
             </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Gérez vos connexions bancaires et synchronisez vos transactions
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Connectez vos banques pour détecter automatiquement vos abonnements
             </p>
           </div>
-          <Link href="/dashboard/bank/connect">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Ajouter un compte
-            </Button>
-          </Link>
+          {connections.length > 0 && (
+            <Link href="/dashboard/bank/connect">
+              <Button className="gap-2">
+                <PlusCircle className="h-4 w-4" />
+                Connecter une banque
+              </Button>
+            </Link>
+          )}
         </div>
 
-        {/* Callback messages */}
-        {successParam === "true" && (
-          <Alert variant="success">
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertDescription>
-              Connexion bancaire établie avec succès ! Vos transactions sont en cours de synchronisation.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {errorParam && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {errorParam === "expired_state"
-                ? "La session de connexion a expiré. Veuillez réessayer."
-                : errorParam === "missing_params"
-                  ? "Paramètres manquants dans la réponse de la banque."
-                  : "Erreur lors de la connexion bancaire. Veuillez réessayer."}
-            </AlertDescription>
-          </Alert>
-        )}
-
+        {/* Error banner */}
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -150,52 +134,61 @@ function BankDashboardContent() {
           </Alert>
         )}
 
-        {syncMessage && (
-          <Alert variant="success">
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertDescription>{syncMessage}</AlertDescription>
-          </Alert>
+        {/* Loading state */}
+        {loading && (
+          <>
+            <BankStatsSkeleton />
+            <div className="grid gap-4 md:grid-cols-2">
+              <BankCardSkeleton />
+              <BankCardSkeleton />
+            </div>
+          </>
         )}
 
-        {/* Connections list */}
-        {connections.length > 0 ? (
-          <div className="space-y-3">
-            {connections.map((conn) => (
-              <BankConnectionCard
-                key={conn.id}
-                connection={conn}
-                onSync={handleSync}
-                onDisconnect={handleDisconnect}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-300 py-16 dark:border-zinc-700">
-            <Building2 className="mb-4 h-12 w-12 text-zinc-400" />
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Aucun compte connecté
-            </h3>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Connectez votre banque pour détecter automatiquement vos abonnements
-            </p>
-            <Link href="/dashboard/bank/connect" className="mt-4">
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Connecter ma banque
-              </Button>
-            </Link>
-          </div>
-        )}
+        {/* Content */}
+        {!loading && connections.length === 0 && <BankEmptyState />}
 
-        {/* Quick links */}
-        {connections.length > 0 && (
-          <div className="flex gap-3">
-            <Link href="/dashboard/transactions">
-              <Button variant="outline" size="sm">
-                Voir les transactions
-              </Button>
-            </Link>
-          </div>
+        {!loading && connections.length > 0 && (
+          <>
+            {/* Stats */}
+            <BankStatsCards
+              bankCount={bankCount}
+              accountCount={accountCount}
+              lastSyncAt={lastSyncAt}
+              totalBalance={hasBalance ? totalBalance : null}
+            />
+
+            {/* Bank cards grid */}
+            <div>
+              <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                Banques connectées
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {connections.map((conn) => (
+                  <BankCard
+                    key={conn.id}
+                    connection={conn}
+                    onSync={handleSync}
+                    onDisconnect={handleDisconnect}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Quick links */}
+            <div className="flex flex-wrap gap-3">
+              <Link href="/dashboard/transactions">
+                <Button variant="outline" size="sm">
+                  Voir toutes les transactions
+                </Button>
+              </Link>
+              <Link href="/dashboard">
+                <Button variant="outline" size="sm">
+                  Tableau de bord
+                </Button>
+              </Link>
+            </div>
+          </>
         )}
       </div>
     </div>
