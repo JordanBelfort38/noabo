@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/Header";
 import { OrganizationSchema } from "@/components/StructuredData";
 import "./globals.css";
@@ -67,6 +68,15 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  alternates: {
+    canonical: "https://noabo.fr",
+    languages: {
+      "fr-FR": "https://noabo.fr",
+    },
+  },
+  other: {
+    "google-site-verification": "REPLACE_WITH_ACTUAL_CODE",
+  },
 };
 
 export default function RootLayout({
@@ -75,18 +85,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <head>
         <OrganizationSchema />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <SessionProvider>
-          <Header />
-          {children}
-          <Toaster richColors position="bottom-right" />
-        </SessionProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange={false}
+        >
+          <SessionProvider>
+            <Header />
+            {children}
+            <Toaster richColors position="bottom-right" />
+          </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

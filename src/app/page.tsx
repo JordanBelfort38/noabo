@@ -20,6 +20,17 @@ import {
   Star,
 } from "lucide-react";
 import { AnimatedCounter } from "@/components/landing/AnimatedCounter";
+import { FAQSchema } from "@/components/seo/FAQSchema";
+import { BreadcrumbSchema } from "@/components/seo/BreadcrumbSchema";
+
+const LANDING_FAQS = [
+  { question: "Est-ce que No Abo est vraiment gratuit ?", answer: "Oui, No Abo est entierement gratuit. Nous ne vendons pas vos donnees et il n'y a aucun abonnement cache." },
+  { question: "Mes donnees bancaires sont-elles en securite ?", answer: "Vos donnees sont chiffrees avec l'algorithme AES-256 (le meme que les banques). Nous sommes conformes au RGPD." },
+  { question: "Quelles banques sont compatibles ?", answer: "Toutes les banques francaises sont compatibles. Vous pouvez aussi importer vos releves au format CSV, PDF ou OFX." },
+  { question: "Comment fonctionne la detection des abonnements ?", answer: "Notre algorithme analyse vos transactions pour identifier les paiements recurrents (meme montant, meme frequence, meme destinataire)." },
+  { question: "Puis-je resilier directement depuis No Abo ?", answer: "No Abo vous guide dans la resiliation avec des instructions detaillees et des lettres pre-redigees conformes au droit francais (Loi Hamon, Loi Chatel)." },
+  { question: "Est-ce que No Abo fonctionne sur mobile ?", answer: "Oui, No Abo est entierement responsive et fonctionne parfaitement sur smartphone, tablette et ordinateur." },
+];
 
 export default async function Home() {
   const session = await auth();
@@ -30,6 +41,9 @@ export default async function Home() {
 
   return (
     <div className="relative overflow-hidden">
+      <FAQSchema questions={LANDING_FAQS} />
+      <BreadcrumbSchema items={[{ name: "Accueil", url: "/" }]} />
+
       {/* Hero Section */}
       <section className="relative isolate px-4 pt-16 pb-24 sm:px-6 sm:pt-24 sm:pb-32 lg:px-8">
         {/* Background gradient */}

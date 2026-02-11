@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { LogOut, User, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Header() {
   const { data: session, status } = useSession();
@@ -33,6 +34,7 @@ export function Header() {
               <Link href="/dashboard/cancellations" className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 px-3 py-2">
                 Résiliations
               </Link>
+              <ThemeToggle />
               <Link href="/profile">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <User className="h-4 w-4" />
@@ -59,6 +61,7 @@ export function Header() {
               <Link href="/help/cancel" className="text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 px-3 py-2">
                 Guides
               </Link>
+              <ThemeToggle />
               <Link href="/login">
                 <Button variant="ghost" size="sm">
                   Se connecter
@@ -71,14 +74,17 @@ export function Header() {
           )}
         </nav>
 
-        {/* Mobile menu button */}
-        <button
-          className="sm:hidden rounded-md p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label={mobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
-        >
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        {/* Mobile: theme toggle + menu button */}
+        <div className="flex items-center gap-1 sm:hidden">
+          <ThemeToggle />
+          <button
+            className="rounded-md p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Nav */}

@@ -60,6 +60,17 @@ export function QuickActionsGrid({
 
   const actions = [
     {
+      key: "bank",
+      icon: Building2,
+      iconColor: "text-emerald-600 dark:text-emerald-400",
+      iconBg: "bg-emerald-50 dark:bg-emerald-900/20",
+      title: hasBanks ? "Ajouter une banque" : "Connecter une banque",
+      description: hasBanks ? "Ajoutez un autre compte bancaire" : "Importez vos transactions en toute sécurité",
+      href: "/dashboard/bank/connect",
+      buttonLabel: hasBanks ? "Ajouter" : "Connecter",
+      highlight: !hasBanks,
+    },
+    {
       key: "subscriptions",
       icon: List,
       iconColor: "text-blue-600 dark:text-blue-400",
@@ -70,16 +81,6 @@ export function QuickActionsGrid({
         : "Voir vos abonnements",
       href: "/dashboard/subscriptions/new",
       buttonLabel: "Voir tout",
-    },
-    {
-      key: "bank",
-      icon: Building2,
-      iconColor: "text-emerald-600 dark:text-emerald-400",
-      iconBg: "bg-emerald-50 dark:bg-emerald-900/20",
-      title: "Comptes bancaires",
-      description: hasBanks ? "Gérer vos connexions" : "Ajouter un compte",
-      href: hasBanks ? "/dashboard/bank" : "/dashboard/bank/connect",
-      buttonLabel: hasBanks ? "Gérer" : "Connecter",
     },
     {
       key: "detect",
@@ -113,10 +114,16 @@ export function QuickActionsGrid({
           const Icon = action.icon;
           const isDetect = action.key === "detect";
 
+          const highlight = "highlight" in action && action.highlight;
+
           return (
             <div
               key={action.key}
-              className="group flex flex-col justify-between rounded-xl border border-zinc-200 bg-white p-5 transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+              className={`group flex flex-col justify-between rounded-xl border p-5 transition-all hover:shadow-md ${
+                highlight
+                  ? "border-blue-300 bg-blue-50/50 ring-1 ring-blue-200 dark:border-blue-800 dark:bg-blue-950/30 dark:ring-blue-900"
+                  : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+              }`}
             >
               <div>
                 <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${action.iconBg}`}>
@@ -148,7 +155,8 @@ export function QuickActionsGrid({
                   </Button>
                 ) : (
                   <Link href={action.href!}>
-                    <Button variant="outline" size="sm" className="w-full gap-1.5">
+                    <Button variant={highlight ? "default" : "outline"} size="sm" className="w-full gap-1.5">
+                      {highlight && <Building2 className="h-3.5 w-3.5" />}
                       {action.buttonLabel}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Button>

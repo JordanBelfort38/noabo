@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Connexion",
+  title: "Connexion — Accédez à votre espace No Abo",
   description:
-    "Connectez-vous à No Abo pour gérer vos abonnements et économiser de l'argent.",
+    "Connectez-vous à No Abo pour suivre vos abonnements, détecter les dépenses inutiles et économiser jusqu'à 550€/an. Accès gratuit et sécurisé.",
 };
 
 export default function LoginLayout({
