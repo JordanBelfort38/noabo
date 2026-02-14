@@ -16,6 +16,7 @@ model User {
   password      String?
   gdprConsent     Boolean   @default(false)
   gdprConsentAt   DateTime?
+  role            String    @default("user") // "user" | "admin"
   bridgeUserUuid  String?   // Bridge API user UUID
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

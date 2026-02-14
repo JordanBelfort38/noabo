@@ -1,11 +1,21 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
-const publicPaths = ["/login", "/api/auth"];
+const publicPaths = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/privacy",
+  "/terms",
+  "/help",
+  "/api/auth",
+];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
 
+  if (pathname === "/") return NextResponse.next();
   const isPublic = publicPaths.some((path) => pathname.startsWith(path));
   if (isPublic) return NextResponse.next();
 
